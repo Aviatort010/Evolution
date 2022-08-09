@@ -1,4 +1,5 @@
 # This is the Evolution electronic Board game.
+import random
 
 import pygame as pg
 import copy
@@ -15,6 +16,7 @@ class Card:
         self.x_size = int(round(card_sizes[0]))
         # self.y_size = int(round(card_sizes[1]))
         self.y_size = int(round(card_sizes[0] / 2 * 3))
+        self.text_size = int(round(self.x_size * 0.15))
 
         # dots of edges of card (main dots), a start pos of card is a Left Down Angle
         self.dots = [start_pos,
@@ -69,6 +71,9 @@ class Card:
     def give_text_prop_coord(self):
         return [self.dots[0][0] + self.x_size // 2, self.dots[0][1] + int(round((self.y_size * 0.85)))]
 
+    def give_text_size(self):
+        return self.text_size
+
     def move(self, x, y):
         for dot in self.dots:
             dot[0] += x
@@ -98,6 +103,7 @@ class Card:
     def new_sizes(self, new_s):
         self.x_size = int(round(new_s[0]))
         self.y_size = int(round(new_s[1]))
+        self.text_size = int(round(self.x_size * 0.15))
 
         self.edges_width = self.x_size // 10
 
@@ -144,6 +150,14 @@ class Library:
     def give_library(self):
         return self.library
 
+    def give_card(self):
+        upper_card = copy.copy(self.library[0])
+        self.library.pop(0)
+        return upper_card
+
+    def shuffle_lib(self):
+        random.shuffle(self.library)
+
 
 class Board:
     def __init__(self, window_dim: tuple, card_size: list):
@@ -180,8 +194,52 @@ class Player:
         self.hand = []
         self.creatures = []
 
-    def take_card(self, new_card: Card):
-        self.hand.append(new_card)
+    def new_creature(self, hand_card: Card):
+        self.hand.remove(hand_card)
+
+        new_creature = Creature()
+        self.creatures.append(new_creature)
+
+    def display_creatures(self, window_sizes, some_screen):
+        # create creatures positions
+        creatures_positions = []
+        creatures_number = len(self.creatures)
+        card_size = self.hand[0].give_sizes()
+        center = window_sizes[0] // 2
+        if creatures_number % 2 == 0:
+            for i in range(creatures_number // 2):
+                # to left from center of window and down
+                creatures_positions.append([(center + 5) - (i + 1) * (card_size[0] + 10), window_sizes[1] // 2 - card_size[1]])
+                # to right from center and down
+                creatures_positions.append([(center + 5) + i * (card_size[0] + 10), window_sizes[1] // 2 - card_size[1]])
+        else:
+            creatures_positions.append([center - card_size[0] // 2, window_sizes[1] // 2 - card_size[1]])
+            for i in range(creatures_positions // 2):
+                # to left from center
+                creatures_positions.append([(center - card_size[0] // 2) - (i + 1) * (card_size[0] + 10), window_sizes[1] // 2 - card_size[1]])
+                # to right from center
+                creatures_positions.append([(center + card_size[0] // 2 + 10) + i * (card_size[0] + 10), window_sizes[1] // 2 - card_size[1]])
+
+        # splitting creatures with new positions
+        for i in range(creatures_number):
+            self.hand[i].new_coordinates(creatures_positions[i])
+
+        # and now display a creatures
+        for some_creature in self.creatures:
+            creature_card = Card()
+            t_dots = true_dots(creature_card.give_polygon(), window_sizes[1])
+            pg.draw.polygon(some_screen, creature_card.give_color(), t_dots)
+
+            t_dots = true_dots(creature_card.give_inner_polygon(), window_sizes[1])
+            pg.draw.polygon(some_screen, creature_card.give_inner_color(), t_dots)
+
+            font = pg.font.Font(None, creature_card.give_text_size())
+            prop_text = font.render(creature_card.give_text_property(), True, creature_card.give_color())
+            prop_text_place = prop_text.get_rect(center=true_dots([creature_card.give_text_prop_coord()], window_sizes[1])[0])
+            some_screen.blit(prop_text, prop_text_place)
+
+    def take_card(self, some_library: Library):
+        self.hand.append(some_library.give_card())
 
     def give_hand(self):
         return self.hand
@@ -191,15 +249,20 @@ class Player:
         cards_positions = []
         cards_number = len(self.hand)
         card_size = self.hand[0].give_sizes()
+        center = window_sizes[0] // 2
         if cards_number % 2 == 0:
-            center = window_sizes[0] // 2
             for i in range(cards_number // 2):
                 # to left from center
                 cards_positions.append([(center + 5) - (i + 1) * (card_size[0] + 10), 20])
                 # to right from center
                 cards_positions.append([(center + 5) + i * (card_size[0] + 10), 20])
         else:
-            pass
+            cards_positions.append([center - card_size[0] // 2, 20])
+            for i in range(cards_number // 2):
+                # to left from center
+                cards_positions.append([(center - card_size[0] // 2) - (i + 1) * (card_size[0] + 10), 20])
+                # to right from center
+                cards_positions.append([(center + card_size[0] // 2 + 10) + i * (card_size[0] + 10), 20])
 
         # splitting cards with new positions
         for i in range(cards_number):
@@ -213,7 +276,7 @@ class Player:
             t_dots = true_dots(some_card.give_inner_polygon(), window_sizes[1])
             pg.draw.polygon(some_screen, some_card.give_inner_color(), t_dots)
 
-            font = pg.font.Font(None, 18)
+            font = pg.font.Font(None, some_card.give_text_size())
             prop_text = font.render(some_card.give_text_property(), True, some_card.give_color())
             prop_text_place = prop_text.get_rect(center=true_dots([some_card.give_text_prop_coord()], window_sizes[1])[0])
             some_screen.blit(prop_text, prop_text_place)
@@ -226,9 +289,12 @@ def true_dots(dots, window_height):
     return td
 
 
-def display_board(some_board: Board):
+def display_board(some_board: Board, players=[]):
     t_dots = true_dots(some_board.give_hand_polygon(), wh)
     pg.draw.polygon(screen, some_board.give_hand_color(), t_dots)
+    for player in players:
+        player.display_hand_cards((ww, wh), screen)
+        player.display_creatures((ww, wh), screen)
 
 
 # System settings
@@ -247,10 +313,11 @@ card_weight = 100
 card_height = 150
 board = Board((ww, wh), [card_weight, card_height])
 cards_lib = Library()
+cards_lib.shuffle_lib()
 
 player_one = Player()
-for card in cards_lib.give_library():
-    player_one.take_card(card)
+for i in range(7):
+    player_one.take_card(cards_lib)
 
 # Initialization of Pygame
 pg.init()
@@ -273,7 +340,6 @@ while run:
                 pressed_keys.remove(event.key)
 
     screen.fill(color_bkg)
-    display_board(board)
-    player_one.display_hand_cards((ww, wh), screen)
+    display_board(board, [player_one])
     pg.display.flip()
 pg.quit()
